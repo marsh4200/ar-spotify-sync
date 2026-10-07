@@ -58,6 +58,26 @@
   button.remove { color: var(--danger); background: transparent; white-space: nowrap; }
   button:hover, select:hover { border-color: var(--accent); }
   select { width: 100%; padding: 10px 12px; font-size: 15px; }
+  button.primary { width: 100%; padding: 12px; font-size: 15px; font-weight: 600; margin-top: 16px;
+                   background: var(--accent-soft); border-color: transparent; color: var(--accent); }
+  dialog { width: min(560px, calc(100vw - 24px)); max-height: calc(100vh - 24px); padding: 0; border-radius: 14px;
+           border: 1px solid var(--line); background: var(--card); color: var(--text); overflow: hidden; }
+  dialog[open] { display: flex; flex-direction: column; }
+  dialog::backdrop { background: rgba(0, 0, 0, 0.5); }
+  .picker-head { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+  .picker-head h3 { margin: 0; font-size: 16px; font-weight: 650; }
+  #picker-back { font-weight: 600; white-space: nowrap; }
+  #picker-list { overflow-y: auto; padding: 8px; }
+  .pick { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; padding: 12px;
+          border: 1px solid transparent; background: transparent; border-radius: 10px; }
+  .pick:hover { background: var(--field); }
+  .pick .tick { flex: 0 0 22px; height: 22px; border-radius: 6px; border: 2px solid var(--line);
+                display: grid; place-items: center; font-size: 14px; font-weight: 700; color: var(--card); }
+  .pick.on .tick { background: var(--accent); border-color: var(--accent); }
+  .pick .what { font-size: 13px; color: var(--muted); }
+  .pick .tag { margin-left: auto; font-size: 13px; color: var(--muted); white-space: nowrap; }
+  .pick.on .tag { color: var(--accent); font-weight: 600; }
+  #picker-hint { padding: 0 16px 14px; margin: 4px 0 0; }
   :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .empty { color: var(--muted); padding: 18px 16px; text-align: center; border-style: dashed; }
   .hint { color: var(--muted); font-size: 13px; margin-top: 8px; }
@@ -84,9 +104,17 @@
   <h2>Speakers in the group</h2>
   <div id="speakers"></div>
 
-  <h2>Add a speaker</h2>
-  <select id="add" aria-label="Add a speaker to the group"></select>
+  <button id="open-picker" class="primary">Add or remove speakers</button>
   <p class="hint" id="addhint"></p>
+
+  <dialog id="picker" aria-labelledby="picker-title">
+    <div class="picker-head">
+      <button id="picker-back" aria-label="Back to the group">&#8249; Back</button>
+      <h3 id="picker-title">Speakers on your network</h3>
+    </div>
+    <div id="picker-list"></div>
+    <p class="hint" id="picker-hint"></p>
+  </dialog>
 
   <p class="hint">
     Changes are saved and applied straight away. Changing a delay or adding a speaker
@@ -200,15 +228,25 @@ function refresh() {
     if (el) el.innerHTML = statusLine(s.name);
   });
 
+  const found = server.discovered || [];
   const chosen = new Set(draft.map((s) => s.name.toLowerCase()));
-  const free = (server.discovered || []).filter((d) => !chosen.has(d.name.toLowerCase()));
-  const add = $("add");
-  const options = free.map((d) => `<option value="${esc(d.name)}">${esc(d.name)} — ${esc(d.kind)}${d.address ? " · " + esc(d.address) : ""}</option>`).join("");
-  const html = `<option value="">${free.length ? "Choose a speaker…" : "No other speakers found"}</option>` + options;
-  if (add.dataset.html !== html && document.activeElement !== add) { add.innerHTML = html; add.dataset.html = html; }
-  add.disabled = !free.length;
-  $("addhint").textContent = (server.discovered || []).length
-    ? "Every AirPlay speaker found on the network is listed here."
+  const inGroup = found.filter((d) => chosen.has(d.name.toLowerCase())).length;
+  $("addhint").textContent = found.length
+    ? `${found.length} AirPlay speaker${found.length === 1 ? "" : "s"} found on the network, ${inGroup} in the group.`
+    : "No AirPlay speakers found yet. They must be switched on and on the same network as Home Assistant.";
+
+  const rows = found.map((d) => {
+    const on = chosen.has(d.name.toLowerCase());
+    return `<button class="pick${on ? " on" : ""}" data-pick="${esc(d.name)}" aria-pressed="${on}">
+        <span class="tick">${on ? "&#10003;" : ""}</span>
+        <span><span class="name">${esc(d.name)}</span><br><span class="what">${esc(d.kind)}${d.address ? " · " + esc(d.address) : ""}</span></span>
+        <span class="tag">${on ? "In the group" : "Tap to add"}</span>
+      </button>`;
+  }).join("");
+  const list = $("picker-list");
+  if (list.dataset.html !== rows) { list.innerHTML = rows; list.dataset.html = rows; }  // no rebuild mid-tap
+  $("picker-hint").textContent = found.length
+    ? "Tap a speaker to add it to the group or take it out. Changes apply straight away."
     : "No AirPlay speakers found yet. They must be switched on and on the same network as Home Assistant.";
 }
 
@@ -280,12 +318,19 @@ document.addEventListener("click", (ev) => {
   scheduleSave();
 });
 
-$("add").addEventListener("change", (ev) => {
-  const name = ev.target.value;
-  if (!name) return;
-  draft.push({ name, delay_ms: 0, volume_percent: 100, protocol: "auto", buffer_ms: 0 });
-  ev.target.value = "";
-  ev.target.blur();
+const picker = $("picker");
+$("open-picker").addEventListener("click", () => picker.showModal());
+$("picker-back").addEventListener("click", () => picker.close());
+// a tap on the dimmed area outside the panel also goes back
+picker.addEventListener("click", (ev) => { if (ev.target === picker) picker.close(); });
+
+$("picker-list").addEventListener("click", (ev) => {
+  const row = ev.target.closest("[data-pick]");
+  if (!row) return;
+  const name = row.dataset.pick;
+  const at = draft.findIndex((s) => s.name.toLowerCase() === name.toLowerCase());
+  if (at >= 0) draft.splice(at, 1);
+  else draft.push({ name, delay_ms: 0, volume_percent: 100, protocol: "auto", buffer_ms: 0 });
   refresh();
   scheduleSave();
 });

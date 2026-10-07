@@ -56,8 +56,9 @@ offers the update and rebuilds the image.
 Open the add-on's page with **Open Web UI** (turn on *Show in sidebar* to keep it one
 click away). It lists every AirPlay speaker found on the network:
 
-- **Add a speaker** is a dropdown of everything found that is not in the group yet.
-  Pick one and it joins, also while music is playing.
+- **Add or remove speakers** opens the list of everything found. Tap a speaker to add
+  it to the group or take it out, also while music is playing. **Back** (or Escape, or
+  a tap outside the list) returns to the group without changing anything.
 - Each speaker in the group has a **Delay** and a **Share of group volume**. Both apply
   while music plays, so you can tune by ear.
 - **Remove** takes a speaker out of the group.
@@ -145,7 +146,7 @@ Set a low-pass crossover (around 80 Hz) on the amplifier so the sub only plays b
   the host uses UDP 319/320, and that the speaker is on the same network segment.
 - **An AirPlay 2 LinkPlay/Arylic device drops out or starts late.** Set `buffer_ms: 2500`
   for it, or force `protocol: raop`.
-- **A speaker is not in the dropdown.** It must be switched on, on the same network
+- **A speaker is not in the list.** It must be switched on, on the same network
   segment as Home Assistant, and visible in an AirPlay picker on a phone.
 - **The web page does not open.** Another program on the host may be using port 8377;
   the log says so at start. Speakers can then still be set under `speakers`.
@@ -154,7 +155,7 @@ Set a low-pass crossover (around 80 Hz) on the amplifier so the sub only plays b
   account is not accepted.
 - Set `log_level: debug` to see every status line from the senders.
 
-## Test status of 0.2.0
+## Test status of 0.2.1
 
 Tested in a lab setup, with two software AirPlay 1 receivers (shairport-sync) and a
 simulated Spotify source that follows go-librespot's event order:
@@ -164,7 +165,7 @@ simulated Spotify source that follows go-librespot's event order:
 - pause and resume lose and repeat nothing; seek, skip, gapless track change, end of
   queue, volume, deselecting the device, a speaker joining late, daemon restart and
   shutdown all behave as described above
-- the web page, driven in a browser: adding from the dropdown, changing delay and
+- the web page, driven in a browser: adding from the speaker list, changing delay and
   volume share and removing a speaker all take effect while music plays and are kept
   across a restart
 

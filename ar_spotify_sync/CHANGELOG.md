@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.1
+
+- The speaker list is now a panel inside the page with a Back button, instead of the
+  browser's own dropdown, which had no way back on some devices.
+- Several speakers can be added or taken out in one visit to the list.
+
 ## 0.2.0
 
 - Web page (Open Web UI) to pick the speakers from a dropdown of the AirPlay devices
