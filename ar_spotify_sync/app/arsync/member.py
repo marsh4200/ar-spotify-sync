@@ -85,6 +85,7 @@ class Member:
         self.started_at_unix_ms = 0
         self.warm_lead_ms = 0
         self.ever_started = False
+        self.volume = 0
         self.route = ""
         self.raop_flow = False
         self.raop_latency_ms = RAOP_DEFAULT_LATENCY_MS
@@ -177,7 +178,8 @@ class Member:
         # Read-write so opening never blocks and commands queue until the sender reads them.
         self._cmd_fd = os.open(self._cmd_path, os.O_RDWR | os.O_NONBLOCK)
 
-        args = self._build_args(volume, shared_ptp)
+        self.volume = max(0, min(100, volume))
+        args = self._build_args(self.volume, shared_ptp)
         self.log.debug("spawn: %s", " ".join(args))
         self.proc = await asyncio.create_subprocess_exec(
             *args,
@@ -268,6 +270,11 @@ class Member:
         fields = _fields(line)
         if "[STATUS] connected" in line:
             self.connected.set()
+            # The level given at connect is not always taken, and some receivers
+            # ignore the first volume command, so send it again now and once more
+            # shortly after (the same approach Music Assistant uses).
+            self._send_volume()
+            asyncio.get_running_loop().call_later(2.0, self._send_volume)
         elif "[STATUS] route" in line:
             self.route = (
                 f"{fields.get('protocol', '?')}/{fields.get('flow', '?')}/"
@@ -380,6 +387,11 @@ class Member:
             return 0
         return self.last_flush_unix_ms + self.raop_latency_ms + 100
 
+    def _send_volume(self) -> None:
+        if self.alive:
+            self._command(f"VOLUME={self.volume}")
+
     def set_volume(self, volume: int) -> None:
         """Set the receiver volume (0-100)."""
-        self._command(f"VOLUME={max(0, min(100, volume))}")
+        self.volume = max(0, min(100, volume))
+        self._send_volume()

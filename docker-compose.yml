@@ -2,6 +2,7 @@
 #   1. mkdir data && cp options.example.json data/options.json   (then edit it)
 #   2. docker compose up -d --build
 #   3. docker compose logs -f
+#   4. open http://<this host>:8377/ and pick the speakers
 services:
   ar-spotify-sync:
     build: ./ar_spotify_sync

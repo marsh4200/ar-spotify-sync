@@ -385,11 +385,19 @@ class Group:
         self.members = []
         await self._spawn_missing_locked()
         if not self.members:
-            LOGGER.error(
-                "None of the configured speakers are on the network; audio is being dropped. "
-                "Known AirPlay devices: %s",
-                ", ".join(sorted(d.name for d in self.discovery.devices.values())) or "none",
-            )
+            seen = ", ".join(sorted(d.name for d in self.discovery.devices.values())) or "none"
+            if self.cfg.speakers:
+                LOGGER.error(
+                    "None of the selected speakers are on the network; audio is being dropped. "
+                    "AirPlay devices seen: %s",
+                    seen,
+                )
+            else:
+                LOGGER.error(
+                    "No speakers are selected; audio is being dropped. Pick them on the "
+                    "add-on's web page. AirPlay devices seen: %s",
+                    seen,
+                )
             self._clear_stream()
             self._no_speakers_until = time.monotonic() + 5.0
             return
@@ -537,6 +545,107 @@ class Group:
             await self._stop_members_locked()
             self._clear_stream()
             self._enter_idle()
+
+    async def apply_speakers(self, wanted: list[SpeakerConfig]) -> None:
+        """Change which speakers are in the group and their trims, while running.
+
+        Volume shares apply at once. A changed delay or an added speaker re-syncs
+        the group from the position being heard, which causes a short gap.
+        """
+        async with self.lock:
+            current = {s.name.casefold(): s for s in self.cfg.speakers}
+            alive = {id(m.speaker): m for m in self._alive()}
+            result: list[SpeakerConfig] = []
+            seen: set[str] = set()
+            resync = False
+            for new in wanted:
+                key = new.name.casefold()
+                if key in seen:
+                    continue
+                seen.add(key)
+                old = current.get(key)
+                if old is None:
+                    result.append(new)
+                    continue
+                member = alive.get(id(old))
+                if old.delay_ms != new.delay_ms:
+                    old.delay_ms = new.delay_ms
+                    if member:
+                        member.delay_ms = new.delay_ms
+                        resync = True
+                if old.volume_percent != new.volume_percent:
+                    old.volume_percent = new.volume_percent
+                    if member:
+                        member.set_volume(self._member_volume(member))
+                connection = (new.protocol, new.buffer_ms, new.address, new.password)
+                if (old.protocol, old.buffer_ms, old.address, old.password) != connection:
+                    old.protocol, old.buffer_ms, old.address, old.password = connection
+                    if member:  # these only take effect on a new connection
+                        self.members.remove(member)
+                        await member.stop()
+                result.append(old)
+
+            kept = {id(s) for s in result}
+            for member in list(self.members):
+                if id(member.speaker) not in kept:
+                    LOGGER.info("%s removed from the group", member.name)
+                    self.members.remove(member)
+                    await member.stop()
+            self.cfg.speakers[:] = result
+            self._no_speakers_until = 0.0
+            LOGGER.info(
+                "Speakers: %s",
+                ", ".join(f"{s.name} ({s.delay_ms:+d} ms, {s.volume_percent}%)" for s in result)
+                or "none selected",
+            )
+
+            if self.state == "paused" and not self._alive() and not result:
+                await self._stop_members_locked()
+                self._clear_stream()
+                self._enter_idle()
+            if self.state != "live":
+                return
+            joining = bool(self._missing_speakers())
+            if not (resync or joining) and self._alive():
+                return
+            asked = now_ms()
+            await self._flush_members_locked()
+            self._rebase_to_heard(asked)
+            if joining:
+                await self._spawn_missing_locked()
+            if self._alive():
+                self._enable_feed()
+            else:
+                LOGGER.warning("No speakers left in the group; stopping")
+                await self._stop_members_locked()
+                self._clear_stream()
+                self._enter_idle()
+
+    def status(self) -> dict:
+        """Snapshot for the web page."""
+        alive = {id(m.speaker): m for m in self._alive()}
+        state = self.state
+        if state == "live":
+            state = "playing" if self.anchor_ms is not None else "starting"
+        speakers = []
+        for speaker in self.cfg.speakers:
+            member = alive.get(id(speaker))
+            device = self.discovery.resolve(speaker)
+            speakers.append(
+                {
+                    "name": speaker.name,
+                    "delay_ms": speaker.delay_ms,
+                    "volume_percent": speaker.volume_percent,
+                    "protocol": speaker.protocol,
+                    "buffer_ms": speaker.buffer_ms,
+                    "found": device is not None,
+                    "device": device.name if device else None,
+                    "address": device.address if device else None,
+                    "connected": bool(member and member.connected.is_set()),
+                    "route": member.route if member else "",
+                }
+            )
+        return {"state": state, "volume": self.volume, "speakers": speakers}
 
     def set_volume(self, volume: int) -> None:
         """Set the group volume (0-100); each speaker applies its own percentage."""

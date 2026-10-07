@@ -41,7 +41,7 @@ From GitHub:
 2. Add `https://github.com/marsh4200/ar-spotify-sync` and close the dialog.
 3. Open **AR Spotify Sync** in the store and install it. The image is built on the
    device, which takes a few minutes.
-4. Set the speaker names on the Configuration tab, start the add-on and open the Log tab.
+4. Start the add-on, then choose **Open Web UI** and pick your speakers from the list.
 
 Without GitHub: copy the `ar_spotify_sync` folder into the `addons` share (Samba or
 SSH), choose **Check for updates** in the store menu, and install it from *Local add-ons*.
@@ -50,6 +50,29 @@ Outside Home Assistant OS, use the `docker-compose.yml` in the repository root.
 
 To release an update, raise `version` in `config.yaml` and push. Home Assistant then
 offers the update and rebuilds the image.
+
+## Choosing the speakers
+
+Open the add-on's page with **Open Web UI** (turn on *Show in sidebar* to keep it one
+click away). It lists every AirPlay speaker found on the network:
+
+- **Add a speaker** is a dropdown of everything found that is not in the group yet.
+  Pick one and it joins, also while music is playing.
+- Each speaker in the group has a **Delay** and a **Share of group volume**. Both apply
+  while music plays, so you can tune by ear.
+- **Remove** takes a speaker out of the group.
+- **Advanced** holds the protocol and the AirPlay 2 buffer for that speaker.
+
+Changes are saved straight away and survive restarts. Changing a delay or adding a
+speaker re-syncs the group, which drops the music out for a second or two.
+
+The list shows AirPlay speakers, under the name they have in an AirPlay picker, because
+those are the devices the add-on can play to. It is not the list of Home Assistant
+media player entities: a media player that does not speak AirPlay cannot join.
+
+Under Home Assistant the page is only reachable through Home Assistant. Run as a plain
+container it is served on port 8377 without a login, so keep that port off untrusted
+networks.
 
 ## Configuration
 
@@ -61,30 +84,22 @@ offers the update and rebuilds the image.
 | `idle_disconnect_seconds` | `45` | How long after a pause the speakers are released. |
 | `normalisation` | `false` | Spotify loudness normalisation. |
 | `log_level` | `info` | `debug`, `info` or `warning`. |
-| `speakers` | | The AirPlay speakers in the group, see below. |
+| `speakers` | empty | Optional. Only used until a selection is saved on the web page. |
 
-Per speaker:
+The per-speaker settings, whether set on the page or under `speakers`:
 
-| Option | Default | Meaning |
+| Setting | Default | Meaning |
 |---|---|---|
-| `name` | | AirPlay name of the speaker. Case-insensitive; part of the name is enough. |
+| `name` | | AirPlay name of the speaker. |
 | `delay_ms` | `0` | Play this speaker later (positive) or earlier (negative), -1000 to 1000. |
 | `volume_percent` | `100` | This speaker's share of the group volume. |
 | `protocol` | `auto` | `auto`, `raop` (AirPlay 1), `airplay2` or `airplay2-compat`. |
 | `buffer_ms` | `0` | AirPlay 2 only: receiver queue depth. `0` is automatic. |
-| `address` | | IP address, to pick a speaker when names are ambiguous. |
-| `password` | | AirPlay password, if the speaker has one. |
+| `address` | | IP address, to pick a speaker when names are ambiguous (YAML only). |
+| `password` | | AirPlay password, if the speaker has one (YAML only). |
 
-At start the log lists every AirPlay device it finds and which one each configured
-speaker matched:
-
-```
-Found AirPlay device: TV Room (['192.168.1.40'])
-Speaker 'TV Room' -> TV Room at 192.168.1.40 (AirPlay 2, delay +0 ms, volume 100%)
-Speaker 'Arylic' not found yet. AirPlay devices seen: Arylic Amp 2F1C, TV Room
-```
-
-Use a name from that list.
+The selection made on the page is stored in `/data/speakers.json` and wins over the
+`speakers` option. Delete that file to go back to the option.
 
 ## Using it
 
@@ -100,10 +115,11 @@ the music left it when you go back to TV sound.
 
 ## Aligning the subwoofer
 
-1. Start with `delay_ms: 0` on both and play something with a sharp kick drum.
+1. Open the web page, leave both delays at 0 and play something with a sharp kick drum.
 2. If the bass lands late, add delay to the soundbar. If it lands early, add delay to
    the amplifier. Steps of 20 ms are a good start, then 5 ms.
-3. Restart the add-on after each change. The value stays put once it is right.
+3. Each change re-syncs the group after a second or two, so wait for the music to come
+   back before judging it. The value is saved once it is right.
 
 Set a low-pass crossover (around 80 Hz) on the amplifier so the sub only plays bass.
 
@@ -129,13 +145,16 @@ Set a low-pass crossover (around 80 Hz) on the amplifier so the sub only plays b
   the host uses UDP 319/320, and that the speaker is on the same network segment.
 - **An AirPlay 2 LinkPlay/Arylic device drops out or starts late.** Set `buffer_ms: 2500`
   for it, or force `protocol: raop`.
-- **A speaker is not found.** Compare the name with the "Found AirPlay device" lines.
+- **A speaker is not in the dropdown.** It must be switched on, on the same network
+  segment as Home Assistant, and visible in an AirPlay picker on a phone.
+- **The web page does not open.** Another program on the host may be using port 8377;
+  the log says so at start. Speakers can then still be set under `speakers`.
 - **The device does not appear in Spotify.** The phone must be on the same network. Check
   the log for the Spotify daemon restarting, which means it cannot reach Spotify or the
   account is not accepted.
 - Set `log_level: debug` to see every status line from the senders.
 
-## Test status of 0.1.0
+## Test status of 0.2.0
 
 Tested in a lab setup, with two software AirPlay 1 receivers (shairport-sync) and a
 simulated Spotify source that follows go-librespot's event order:
@@ -145,9 +164,13 @@ simulated Spotify source that follows go-librespot's event order:
 - pause and resume lose and repeat nothing; seek, skip, gapless track change, end of
   queue, volume, deselecting the device, a speaker joining late, daemon restart and
   shutdown all behave as described above
+- the web page, driven in a browser: adding from the dropdown, changing delay and
+  volume share and removing a speaker all take effect while music plays and are kept
+  across a restart
 
 Not yet tested: a real Spotify account, AirPlay 2 speakers (the Sonos path, including
-PTP), real hardware, and the container build on Home Assistant.
+PTP), real hardware, the container build on Home Assistant, and the web page opened
+through Home Assistant's ingress.
 
 ## Credits and licences
 

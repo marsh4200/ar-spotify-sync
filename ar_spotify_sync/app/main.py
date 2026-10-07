@@ -16,6 +16,7 @@ from arsync.config import Config, load_config
 from arsync.discovery import Discovery
 from arsync.group import Group
 from arsync.spotify import SpotifySource
+from arsync.web import WebUI
 
 LOGGER = logging.getLogger("arsync")
 
@@ -116,8 +117,16 @@ async def run() -> int:
     group = Group(cfg, discovery, dacp_id)
     group.shared_ptp = ptp is not None
     group.start()
+    webui = WebUI(cfg, group, discovery)
+    await webui.start()
 
     await asyncio.sleep(DISCOVERY_SETTLE_S)
+    if not cfg.speakers:
+        LOGGER.warning(
+            "No speakers selected yet. Open the add-on's web page and pick them from the list. "
+            "AirPlay devices seen: %s",
+            ", ".join(sorted(d.name for d in discovery.devices.values())) or "none",
+        )
     for speaker in cfg.speakers:
         device = discovery.resolve(speaker)
         if device:
@@ -149,6 +158,7 @@ async def run() -> int:
     LOGGER.info("Shutting down")
     source_task.cancel()
     await asyncio.gather(source_task, return_exceptions=True)
+    await webui.stop()
     await group.shutdown()
     if ptp and ptp.returncode is None:
         ptp.terminate()

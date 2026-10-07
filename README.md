@@ -12,14 +12,15 @@ Or by hand:
 
 1. Settings -> Add-ons -> Add-on Store -> menu (top right) -> **Repositories**.
 2. Add `https://github.com/marsh4200/ar-spotify-sync`.
-3. Install **AR Spotify Sync**, set the speaker names on the Configuration tab and start it.
+3. Install **AR Spotify Sync**, start it, choose **Open Web UI** and pick your speakers
+   from the list.
 
 Needs Home Assistant OS or Supervised, on amd64 or aarch64. Full instructions,
 options and troubleshooting are in [the add-on docs](ar_spotify_sync/DOCS.md).
 
 ## Status
 
-Version 0.1.0 has been tested in a lab setup only: two software AirPlay 1 receivers and
+Version 0.2.0 has been tested in a lab setup only: two software AirPlay 1 receivers and
 a simulated Spotify source. Real Spotify, AirPlay 2 speakers and the container build on
 Home Assistant are not yet proven. See "Test status" in the docs.
 

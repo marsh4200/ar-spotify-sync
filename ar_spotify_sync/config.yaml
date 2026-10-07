@@ -1,5 +1,5 @@
 name: AR Spotify Sync
-version: "0.1.0"
+version: "0.2.0"
 slug: ar_spotify_sync
 description: One Spotify Connect speaker that plays in sync on several AirPlay devices
 url: https://github.com/marsh4200/ar-spotify-sync
@@ -12,6 +12,11 @@ boot: auto
 # Host networking is required: mDNS discovery, AirPlay timing and the PTP
 # clock (UDP 319/320) that AirPlay 2 speakers such as Sonos lock to.
 host_network: true
+# The speaker picker page, opened from the add-on page or the sidebar.
+ingress: true
+ingress_port: 8377
+panel_icon: mdi:speaker-multiple
+panel_title: Spotify Sync
 options:
   device_name: TV Room Music
   bitrate: 320
@@ -19,13 +24,9 @@ options:
   idle_disconnect_seconds: 45
   normalisation: false
   log_level: info
-  speakers:
-    - name: TV Room
-      delay_ms: 0
-      volume_percent: 100
-    - name: Arylic
-      delay_ms: 0
-      volume_percent: 100
+  # Speakers are picked on the add-on's web page. Entries listed here are only
+  # used until a selection has been saved there.
+  speakers: []
 schema:
   device_name: str
   bitrate: int(96,320)

@@ -7,4 +7,5 @@ Pick the device in the Spotify app and every configured speaker plays together. 
 speaker has its own delay trim and volume share, so a soundbar and an amplifier
 driving a subwoofer can be lined up by ear.
 
-See the Documentation tab for setup.
+After starting it, choose **Open Web UI** to pick the speakers from the AirPlay devices
+found on your network. See the Documentation tab for the rest.

@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AR Spotify Sync</title>
+<style>
+  :root {
+    --bg: #f3f4f6; --card: #ffffff; --text: #16181d; --muted: #646b78; --line: #dfe2e8;
+    --accent: #0b7285; --accent-soft: #e3f4f7; --ok: #1f8a4c; --warn: #b4540a; --off: #8a909c;
+    --danger: #b3261e; --field: #f7f8fa;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #111318; --card: #1b1e25; --text: #e9ebf0; --muted: #9aa1ae; --line: #2c313b;
+      --accent: #4cc3d9; --accent-soft: #14323a; --ok: #5fd08c; --warn: #f0a55a; --off: #7b8290;
+      --danger: #ff8a80; --field: #14171d;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+  main { max-width: 760px; margin: 0 auto; padding: 20px 16px 48px; }
+  header { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin-bottom: 18px; }
+  h1 { font-size: 20px; margin: 0; font-weight: 650; letter-spacing: -0.01em; }
+  h2 { font-size: 13px; margin: 26px 0 10px; font-weight: 650; color: var(--muted);
+       text-transform: uppercase; letter-spacing: 0.06em; }
+  .sub { color: var(--muted); font-size: 13px; }
+  .grow { flex: 1 1 auto; min-width: 0; }
+  .pill { display: inline-flex; align-items: center; gap: 7px; padding: 4px 11px; border-radius: 999px;
+          background: var(--card); border: 1px solid var(--line); font-size: 13px; font-weight: 600; white-space: nowrap; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--off); }
+  .pill.playing .dot { background: var(--ok); }
+  .pill.starting .dot, .pill.paused .dot { background: var(--warn); }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin-bottom: 10px; }
+  .row { display: flex; align-items: center; gap: 12px; }
+  .name { font-weight: 650; font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .status { font-size: 13px; color: var(--muted); }
+  .status b { font-weight: 600; }
+  .status .ok { color: var(--ok); } .status .warn { color: var(--warn); }
+  .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 22px; margin-top: 12px; }
+  @media (max-width: 560px) { .controls { grid-template-columns: 1fr; } }
+  .control label { display: flex; justify-content: space-between; align-items: baseline;
+                   font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+  .control .field { display: flex; align-items: center; gap: 10px; }
+  input[type=range] { flex: 1 1 auto; min-width: 0; accent-color: var(--accent); height: 28px; }
+  input[type=number] {
+    width: 78px; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line);
+    background: var(--field); color: var(--text); font: inherit; text-align: right;
+  }
+  .unit { font-size: 13px; color: var(--muted); width: 20px; }
+  button, select {
+    font: inherit; color: var(--text); background: var(--field); border: 1px solid var(--line);
+    border-radius: 8px; padding: 7px 12px; cursor: pointer;
+  }
+  button.remove { color: var(--danger); background: transparent; white-space: nowrap; }
+  button:hover, select:hover { border-color: var(--accent); }
+  select { width: 100%; padding: 10px 12px; font-size: 15px; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .empty { color: var(--muted); padding: 18px 16px; text-align: center; border-style: dashed; }
+  .hint { color: var(--muted); font-size: 13px; margin-top: 8px; }
+  .saved { font-size: 13px; color: var(--muted); min-width: 72px; text-align: right; }
+  .saved.err { color: var(--danger); }
+  details { margin-top: 12px; }
+  summary { cursor: pointer; font-size: 13px; color: var(--muted); }
+  .adv { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 22px; margin-top: 10px; }
+  @media (max-width: 560px) { .adv { grid-template-columns: 1fr; } }
+  .adv select, .adv input[type=number] { width: 100%; text-align: left; padding: 7px 10px; font-size: 14px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="grow">
+      <h1>AR Spotify Sync</h1>
+      <div class="sub">Shows up in Spotify as <b id="devname">…</b></div>
+    </div>
+    <span class="saved" id="saved" role="status" aria-live="polite"></span>
+    <span class="pill" id="pill"><span class="dot"></span><span id="pilltext">…</span></span>
+  </header>
+
+  <h2>Speakers in the group</h2>
+  <div id="speakers"></div>
+
+  <h2>Add a speaker</h2>
+  <select id="add" aria-label="Add a speaker to the group"></select>
+  <p class="hint" id="addhint"></p>
+
+  <p class="hint">
+    Changes are saved and applied straight away. Changing a delay or adding a speaker
+    re-syncs the group, so the music drops out for a second or two.
+    A positive delay makes that speaker play later.
+  </p>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let server = null;      // last state from the add-on
+let draft = [];         // the selection being edited
+let dirty = false, saveTimer = null, builtFor = "";
+
+const STATE_TEXT = { idle: "Idle", starting: "Starting", playing: "Playing", paused: "Paused" };
+const PROTOCOLS = [["auto", "Automatic"], ["raop", "AirPlay 1"], ["airplay2", "AirPlay 2"],
+                   ["airplay2-compat", "AirPlay 2 (compatibility)"]];
+
+function esc(text) {
+  return String(text).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+function pick(s) {
+  return { name: s.name, delay_ms: s.delay_ms, volume_percent: s.volume_percent,
+           protocol: s.protocol || "auto", buffer_ms: s.buffer_ms || 0 };
+}
+
+function clampInt(value, low, high, fallback) {
+  const n = Math.round(Number(value));
+  return Number.isFinite(n) ? Math.max(low, Math.min(high, n)) : fallback;
+}
+
+function statusLine(name) {
+  const s = (server.speakers || []).find((x) => x.name.toLowerCase() === name.toLowerCase());
+  const d = (server.discovered || []).find((x) => x.name.toLowerCase() === name.toLowerCase())
+         || (s && s.device && (server.discovered || []).find((x) => x.name === s.device));
+  if (!s && !d) return '<span class="warn">Not found on the network</span>';
+  if (s && !s.found && !d) return '<span class="warn">Not found on the network</span>';
+  const parts = [];
+  if (d) parts.push(esc(d.kind), esc(d.address || ""));
+  if (s && s.connected) parts.push('<b class="ok">connected</b>');
+  else if (server.state === "playing" || server.state === "starting") parts.push('<span class="warn">not connected</span>');
+  return parts.filter(Boolean).join(" · ");
+}
+
+function buildSpeakers() {
+  const box = $("speakers");
+  if (!draft.length) {
+    box.innerHTML = '<div class="card empty">No speakers in the group yet. Choose one from the list below.</div>';
+    return;
+  }
+  box.innerHTML = draft.map((s, i) => `
+    <div class="card" data-i="${i}">
+      <div class="row">
+        <div class="grow">
+          <div class="name">${esc(s.name)}</div>
+          <div class="status" data-status="${i}"></div>
+        </div>
+        <button class="remove" data-remove="${i}" aria-label="Remove ${esc(s.name)} from the group">Remove</button>
+      </div>
+      <div class="controls">
+        <div class="control">
+          <label for="d${i}"><span>Delay</span></label>
+          <div class="field">
+            <input type="range" id="dr${i}" data-k="delay_ms" data-i="${i}" min="-300" max="300" step="5" value="${s.delay_ms}" aria-label="Delay for ${esc(s.name)}">
+            <input type="number" id="d${i}" data-k="delay_ms" data-i="${i}" min="-1000" max="1000" step="5" value="${s.delay_ms}">
+            <span class="unit">ms</span>
+          </div>
+        </div>
+        <div class="control">
+          <label for="v${i}"><span>Share of group volume</span></label>
+          <div class="field">
+            <input type="range" id="vr${i}" data-k="volume_percent" data-i="${i}" min="0" max="100" step="1" value="${s.volume_percent}" aria-label="Volume share for ${esc(s.name)}">
+            <input type="number" id="v${i}" data-k="volume_percent" data-i="${i}" min="0" max="100" step="1" value="${s.volume_percent}">
+            <span class="unit">%</span>
+          </div>
+        </div>
+      </div>
+      <details>
+        <summary>Advanced</summary>
+        <div class="adv">
+          <div class="control">
+            <label for="p${i}"><span>Protocol</span></label>
+            <select id="p${i}" data-k="protocol" data-i="${i}">
+              ${PROTOCOLS.map(([v, t]) => `<option value="${v}"${v === s.protocol ? " selected" : ""}>${t}</option>`).join("")}
+            </select>
+          </div>
+          <div class="control">
+            <label for="b${i}"><span>AirPlay 2 buffer (0 = automatic)</span></label>
+            <div class="field">
+              <input type="number" id="b${i}" data-k="buffer_ms" data-i="${i}" min="0" max="3000" step="100" value="${s.buffer_ms}">
+              <span class="unit">ms</span>
+            </div>
+          </div>
+        </div>
+      </details>
+    </div>`).join("");
+}
+
+function refresh() {
+  if (!server) return;
+  $("devname").textContent = server.device_name;
+  $("pill").className = "pill " + server.state;
+  $("pilltext").textContent = (STATE_TEXT[server.state] || server.state)
+    + (server.state === "playing" ? " · volume " + server.volume : "");
+
+  const key = draft.map((s) => s.name).join("\n");
+  if (key !== builtFor) { buildSpeakers(); builtFor = key; }
+  draft.forEach((s, i) => {
+    const el = document.querySelector(`[data-status="${i}"]`);
+    if (el) el.innerHTML = statusLine(s.name);
+  });
+
+  const chosen = new Set(draft.map((s) => s.name.toLowerCase()));
+  const free = (server.discovered || []).filter((d) => !chosen.has(d.name.toLowerCase()));
+  const add = $("add");
+  const options = free.map((d) => `<option value="${esc(d.name)}">${esc(d.name)} — ${esc(d.kind)}${d.address ? " · " + esc(d.address) : ""}</option>`).join("");
+  const html = `<option value="">${free.length ? "Choose a speaker…" : "No other speakers found"}</option>` + options;
+  if (add.dataset.html !== html && document.activeElement !== add) { add.innerHTML = html; add.dataset.html = html; }
+  add.disabled = !free.length;
+  $("addhint").textContent = (server.discovered || []).length
+    ? "Every AirPlay speaker found on the network is listed here."
+    : "No AirPlay speakers found yet. They must be switched on and on the same network as Home Assistant.";
+}
+
+function markSaved(text, isError) {
+  const el = $("saved");
+  el.textContent = text;
+  el.className = "saved" + (isError ? " err" : "");
+}
+
+function scheduleSave() {
+  dirty = true;
+  markSaved("Saving…");
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(save, 450);
+}
+
+async function save() {
+  try {
+    const resp = await fetch("api/speakers", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ speakers: draft }),
+    });
+    if (!resp.ok) throw new Error((await resp.text()) || resp.status);
+    server = await resp.json();
+    dirty = false;
+    markSaved("Saved");
+    refresh();
+  } catch (err) {
+    markSaved("Not saved", true);
+    console.error(err);
+  }
+}
+
+async function poll() {
+  try {
+    const resp = await fetch("api/state", { cache: "no-store" });
+    if (!resp.ok) throw new Error(resp.status);
+    server = await resp.json();
+    if (!dirty && !document.querySelector("#speakers :focus")) {
+      draft = server.speakers.map(pick);
+    }
+    if ($("saved").textContent === "No connection") markSaved("");
+    refresh();
+  } catch (err) {
+    markSaved("No connection", true);
+  }
+}
+
+document.addEventListener("input", (ev) => {
+  const el = ev.target, i = Number(el.dataset.i), k = el.dataset.k;
+  if (!k || !draft[i]) return;
+  if (k === "protocol") { draft[i][k] = el.value; scheduleSave(); return; }
+  const limits = { delay_ms: [-1000, 1000], volume_percent: [0, 100], buffer_ms: [0, 3000] }[k];
+  if (el.type === "number" && el.value === "") return;      // still typing
+  const value = clampInt(el.value, limits[0], limits[1], draft[i][k]);
+  draft[i][k] = value;
+  // keep the slider and the number box in step
+  document.querySelectorAll(`[data-i="${i}"][data-k="${k}"]`).forEach((other) => {
+    if (other !== el) other.value = value;
+  });
+  scheduleSave();
+});
+
+document.addEventListener("click", (ev) => {
+  const i = ev.target.dataset.remove;
+  if (i === undefined) return;
+  draft.splice(Number(i), 1);
+  refresh();
+  scheduleSave();
+});
+
+$("add").addEventListener("change", (ev) => {
+  const name = ev.target.value;
+  if (!name) return;
+  draft.push({ name, delay_ms: 0, volume_percent: 100, protocol: "auto", buffer_ms: 0 });
+  ev.target.value = "";
+  ev.target.blur();
+  refresh();
+  scheduleSave();
+});
+
+poll();
+setInterval(poll, 3000);
+</script>
+</body>
+</html>
