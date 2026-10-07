@@ -58,6 +58,8 @@
   button.remove { color: var(--danger); background: transparent; white-space: nowrap; }
   button:hover, select:hover { border-color: var(--accent); }
   select { width: 100%; padding: 10px 12px; font-size: 15px; }
+  #ha-back { font-weight: 600; margin-bottom: 16px; padding: 9px 14px; }
+  #ha-back[hidden] { display: none; }
   button.primary { width: 100%; padding: 12px; font-size: 15px; font-weight: 600; margin-top: 16px;
                    background: var(--accent-soft); border-color: transparent; color: var(--accent); }
   dialog { width: min(560px, calc(100vw - 24px)); max-height: calc(100vh - 24px); padding: 0; border-radius: 14px;
@@ -92,6 +94,7 @@
 </head>
 <body>
 <main>
+  <button id="ha-back" hidden aria-label="Back to Home Assistant">&#8249; Back to Home Assistant</button>
   <header>
     <div class="grow">
       <h1>AR Spotify Sync</h1>
@@ -316,6 +319,37 @@ document.addEventListener("click", (ev) => {
   draft.splice(Number(i), 1);
   refresh();
   scheduleSave();
+});
+
+// Inside Home Assistant this page sits in a frame with no way out of its own,
+// so offer one. Ingress pages share Home Assistant's origin, which is what lets
+// the frame drive the outer window.
+function haWindow() {
+  try {
+    if (window.top !== window.self && window.top.location.origin === window.location.origin) return window.top;
+  } catch (err) { /* framed by another origin: leave the button hidden */ }
+  return null;
+}
+if (haWindow()) $("ha-back").hidden = false;
+function haHome(top) {
+  // Home Assistant's own way of changing page, without reloading it.
+  top.history.pushState(null, "", "/");
+  top.dispatchEvent(new CustomEvent("location-changed", { detail: { replace: false } }));
+  // Home Assistant removes this frame when it changes page. Still here? Load it the plain way.
+  setTimeout(() => top.location.assign("/"), 700);
+}
+$("ha-back").addEventListener("click", () => {
+  const top = haWindow();
+  if (!top) return;
+  // Go back to the page this was opened from, but only when that page is known
+  // to be part of Home Assistant; otherwise go to Home Assistant's start page.
+  const nav = top.navigation;
+  if (nav && nav.currentEntry && nav.currentEntry.index > 0) {
+    top.history.back();
+    setTimeout(() => haHome(top), 700);   // only runs if going back did not leave this page
+  } else {
+    haHome(top);
+  }
 });
 
 const picker = $("picker");

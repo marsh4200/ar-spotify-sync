@@ -63,6 +63,8 @@ click away). It lists every AirPlay speaker found on the network:
   while music plays, so you can tune by ear.
 - **Remove** takes a speaker out of the group.
 - **Advanced** holds the protocol and the AirPlay 2 buffer for that speaker.
+- **Back to Home Assistant** at the top returns to the page you opened this from, or to
+  Home Assistant's start page.
 
 Changes are saved straight away and survive restarts. Changing a delay or adding a
 speaker re-syncs the group, which drops the music out for a second or two.
@@ -155,7 +157,7 @@ Set a low-pass crossover (around 80 Hz) on the amplifier so the sub only plays b
   account is not accepted.
 - Set `log_level: debug` to see every status line from the senders.
 
-## Test status of 0.2.1
+## Test status of 0.2.2
 
 Tested in a lab setup, with two software AirPlay 1 receivers (shairport-sync) and a
 simulated Spotify source that follows go-librespot's event order:

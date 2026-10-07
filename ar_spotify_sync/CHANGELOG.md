@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.2
+
+- "Back to Home Assistant" button at the top of the page, for when Home Assistant
+  shows the page without a header or sidebar of its own.
+
 ## 0.2.1
 
 - The speaker list is now a panel inside the page with a Back button, instead of the

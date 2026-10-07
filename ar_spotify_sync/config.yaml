@@ -1,5 +1,5 @@
 name: AR Spotify Sync
-version: "0.2.1"
+version: "0.2.2"
 slug: ar_spotify_sync
 description: One Spotify Connect speaker that plays in sync on several AirPlay devices
 url: https://github.com/marsh4200/ar-spotify-sync
