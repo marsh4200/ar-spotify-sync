@@ -1,0 +1,12 @@
+{
+  "device_name": "TV Room Music",
+  "bitrate": 320,
+  "start_volume": 25,
+  "idle_disconnect_seconds": 45,
+  "normalisation": false,
+  "log_level": "info",
+  "speakers": [
+    { "name": "TV Room", "delay_ms": 0, "volume_percent": 100 },
+    { "name": "Arylic", "delay_ms": 0, "volume_percent": 100 }
+  ]
+}

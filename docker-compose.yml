@@ -1,0 +1,12 @@
+# Running outside Home Assistant OS.
+#   1. mkdir data && cp options.example.json data/options.json   (then edit it)
+#   2. docker compose up -d --build
+#   3. docker compose logs -f
+services:
+  ar-spotify-sync:
+    build: ./ar_spotify_sync
+    container_name: ar-spotify-sync
+    network_mode: host
+    restart: unless-stopped
+    volumes:
+      - ./data:/data
